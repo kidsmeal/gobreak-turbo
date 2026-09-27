@@ -14,6 +14,7 @@ from . import engine
 from . import mutants as mut
 from . import project as proj
 from . import runner
+from . import triage
 
 EXIT_CLEAN = 0
 EXIT_SURVIVORS = 1
@@ -21,6 +22,14 @@ EXIT_ERROR = 2
 
 SELFCHECK_DIR = Path(__file__).parent / "selfcheck"
 SELFCHECK_COMMAND = "{godot} --headless --path . -s res://run_tests.gd -- --tests {tests}"
+
+_TRIAGE_ORDER = (
+    (triage.DEAD, "dead: never ran in the tests, no reference in non-test code; delete it"),
+    (triage.UNREACHED, "unreached: never ran in the tests, referenced by other code; add a test that runs it"),
+    (triage.REACHED, "reached: ran in the tests, no test failed; rule it with `gobreak rule`"),
+    (triage.RULED_GAP, "ruled gap: a recorded missing test"),
+    (triage.RULED_EQUIVALENT, "ruled equivalent: recorded as no behavior change"),
+)
 
 
 def _csv(value: str) -> list[str]:
@@ -78,11 +87,32 @@ def _print_report(session: engine.Session) -> None:
     print(f"mutants:  {len(session.results)} ({counts})")
     score = session.score
     print("score:    n/a" if score is None else f"score:    {score:.0%} killed")
-    survivors = [r for r in session.results if r.status == runner.SURVIVED]
-    if survivors:
+    survivors = session.survivors()
+    if not survivors:
+        return
+    if not session.triaged:
         print("\nsurvivors (no test failed with this change):")
         for r in survivors:
-            print(f"  {session.target}:{r.mutant.describe()}")
+            print(f"  #{r.mutant.index:<4} {r.mutant.describe()}")
+        return
+    print("triage:   " + ", ".join(f"{name} {len(session.survivors(name))}" for name, _ in _TRIAGE_ORDER))
+    if session.triage_note:
+        print(f"note:     {session.triage_note}")
+    for name, heading in _TRIAGE_ORDER:
+        group = session.survivors(name)
+        if not group:
+            continue
+        print(f"\n{heading} ({len(group)}):")
+        for r in group:
+            line = f"  #{r.mutant.index:<4} {r.mutant.describe()}"
+            if r.ruling is not None:
+                line += f"  [{r.ruling.reason}]"
+            print(line)
+    if session.stale_rulings:
+        print(f"\nstale rulings ({len(session.stale_rulings)}): the mutant is now killed or its line changed; "
+              "remove with `gobreak rule <target> --clear-stale`:")
+        for ruling in session.stale_rulings:
+            print(f"  {ruling.ruling:<10} {ruling.before}  ->  {ruling.after}")
 
 
 def _write_json(session: engine.Session, path: str) -> None:
@@ -97,6 +127,11 @@ def _write_json(session: engine.Session, path: str) -> None:
             name: session.count(name)
             for name in (runner.KILLED, runner.SURVIVED, runner.TIMEOUT, runner.INVALID)
         },
+        "triage": (
+            {name: len(session.survivors(name)) for name, _ in _TRIAGE_ORDER}
+            if session.triaged else None
+        ),
+        "triage_note": session.triage_note,
         "score": session.score,
         "mutants": [
             {
@@ -107,9 +142,15 @@ def _write_json(session: engine.Session, path: str) -> None:
                 "before": r.mutant.before,
                 "after": r.mutant.after,
                 "status": r.status,
+                "triage": r.triage,
+                "reason": r.ruling.reason if r.ruling else None,
                 "seconds": round(r.seconds, 3),
             }
             for r in session.results
+        ],
+        "stale_rulings": [
+            {"before": s.before, "after": s.after, "ruling": s.ruling, "reason": s.reason}
+            for s in session.stale_rulings
         ],
     }
     Path(path).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -166,49 +207,94 @@ def cmd_run(args: argparse.Namespace) -> int:
         lines=args.lines,
         on_result=_print_result,
         on_status=lambda msg: print(msg, flush=True),
+        triage_enabled=not args.no_triage,
+        test_patterns=args.test_patterns,
     )
     _print_report(session)
     if args.json:
         _write_json(session, args.json)
-    return EXIT_SURVIVORS if session.count(runner.SURVIVED) else EXIT_CLEAN
+    return EXIT_SURVIVORS if session.open_survivors else EXIT_CLEAN
+
+
+def cmd_rule(args: argparse.Namespace) -> int:
+    root, target = _resolve_target(args.target, args.project)
+    source = target.read_bytes().decode("utf-8")
+    found = {m.index: m for m in mut.generate(source)}
+    target_res = proj.to_res(root, target)
+    rulings = triage.load_rulings(root)
+
+    if args.clear_stale:
+        live = {(target_res, m.before, m.after) for m in found.values()}
+        kept = [r for r in rulings if r.file != target_res or r.key() in live]
+        path = triage.save_rulings(root, kept)
+        print(f"removed {len(rulings) - len(kept)} ruling(s) whose mutant no longer exists; {path}")
+        return EXIT_CLEAN
+
+    if args.id is None:
+        raise engine.SessionError("rule: pass a mutant id (from --dry-run or the run report), or --clear-stale")
+    m = found.get(args.id)
+    if m is None:
+        raise engine.SessionError(f"no mutant #{args.id} in {target_res}; ids come from the current file, rerun --dry-run")
+    key = (target_res, m.before, m.after)
+    rulings = [r for r in rulings if r.key() != key]
+    if args.clear:
+        path = triage.save_rulings(root, rulings)
+        print(f"cleared ruling for #{m.index} {m.describe()}; {path}")
+        return EXIT_CLEAN
+    if args.verdict is None or not args.reason:
+        raise engine.SessionError("rule: pass a verdict (equivalent or gap) and --reason")
+    rulings.append(triage.Ruling(target_res, m.before, m.after, args.verdict, args.reason))
+    path = triage.save_rulings(root, rulings)
+    print(f"ruled #{m.index} {args.verdict}: {m.describe()}; {path}")
+    return EXIT_CLEAN
+
+
+def _funcs_of(session: engine.Session, source: str, status: str) -> set[str]:
+    infos = triage.analyze(source)
+    return {infos[r.mutant.line - 1].func or "" for r in session.survivors(status)}
 
 
 def cmd_selfcheck(args: argparse.Namespace) -> int:
     godot = _resolve_godot(args.godot)
     target = SELFCHECK_DIR / "fixture_math.gd"
+    source = target.read_text(encoding="utf-8")
     failures: list[str] = []
 
-    for label, test, expect_survivors in (
-        ("strong tests", "res://tests/test_fixture_strong.gd", False),
-        ("hollow tests", "res://tests/test_fixture_hollow.gd", True),
-    ):
-        print(f"\n== {label}: {test}")
-        session = engine.run_session(
-            SELFCHECK_DIR,
-            target,
-            SELFCHECK_COMMAND,
-            godot,
-            [test],
-            jobs=args.jobs,
-            on_result=_print_result,
-            on_status=lambda msg: print(msg, flush=True),
+    def session_for(test: str) -> engine.Session:
+        print(f"\n== {test}")
+        s = engine.run_session(
+            SELFCHECK_DIR, target, SELFCHECK_COMMAND, godot, [test],
+            jobs=args.jobs, on_result=_print_result, on_status=lambda msg: print(msg, flush=True),
         )
-        _print_report(session)
-        survived = session.count(runner.SURVIVED)
-        killed = session.count(runner.KILLED)
-        if expect_survivors and survived == 0:
-            failures.append(f"{label}: expected survivors, got 0 (hollow tests reported as killing mutants)")
-        if not expect_survivors and survived:
-            failures.append(f"{label}: expected 0 survivors, got {survived}")
-        if not expect_survivors and killed == 0:
-            failures.append(f"{label}: expected killed mutants, got 0")
+        _print_report(s)
+        return s
+
+    strong = session_for("res://tests/test_fixture_strong.gd")
+    reached = strong.survivors(triage.REACHED)
+    if reached:
+        failures.append(f"strong tests: expected 0 reached survivors, got {len(reached)}")
+    dead = _funcs_of(strong, source, triage.DEAD)
+    if dead != {"unused_double"}:
+        failures.append(f"strong tests: expected dead survivors only in unused_double, got {sorted(dead)}")
+    unreached = _funcs_of(strong, source, triage.UNREACHED)
+    if unreached != {"only_called_by_caller"}:
+        failures.append(f"strong tests: expected unreached survivors only in only_called_by_caller, got {sorted(unreached)}")
+    if strong.count(runner.KILLED) == 0:
+        failures.append("strong tests: expected killed mutants, got 0")
+
+    hollow = session_for("res://tests/test_fixture_hollow.gd")
+    if not hollow.survivors(triage.REACHED):
+        failures.append("hollow tests: expected reached survivors, got 0 (hollow tests reported as killing mutants)")
+    if hollow.count(runner.KILLED):
+        failures.append(f"hollow tests: expected 0 killed, got {hollow.count(runner.KILLED)}")
 
     print()
     if failures:
         for f in failures:
             print(f"SELFCHECK FAIL: {f}")
         return EXIT_ERROR
-    print("SELFCHECK PASS: strong tests killed every mutant, hollow tests left survivors")
+    print("SELFCHECK PASS: strong tests killed every reached mutant; triage found the dead and "
+          "unreached functions; hollow tests left reached survivors")
     return EXIT_CLEAN
 
 
@@ -237,7 +323,19 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--keep-copies", action="store_true", help="keep the temp project copies after the run")
     run.add_argument("--json", help="write the full report as JSON to this path")
     run.add_argument("--dry-run", action="store_true", help="list mutants only; no copy, no Godot")
+    run.add_argument("--no-triage", action="store_true", help="skip the coverage run and rulings; survivors are not sorted")
     run.set_defaults(func=cmd_run)
+
+    rule = sub.add_parser("rule", help="record a ruling for one surviving mutant in .gobreak/rulings.json")
+    rule.add_argument("target", help="the .gd file: a file path or a res:// path")
+    rule.add_argument("id", type=int, nargs="?", help="mutant id from --dry-run or the run report")
+    rule.add_argument("verdict", nargs="?", choices=[triage.EQUIVALENT, triage.GAP],
+                      help="equivalent: no behavior change; gap: a missing test")
+    rule.add_argument("--reason", help="why; stored with the ruling and printed in reports")
+    rule.add_argument("--clear", action="store_true", help="remove the ruling for this mutant")
+    rule.add_argument("--clear-stale", action="store_true", help="remove rulings for this file whose mutant no longer exists")
+    rule.add_argument("--project", help="Godot project directory (default: nearest project.godot above the target)")
+    rule.set_defaults(func=cmd_rule)
 
     check = sub.add_parser("selfcheck", help="prove the tool tells strong tests from hollow ones on a bundled fixture")
     check.add_argument("--godot", help="Godot executable (default: $GODOT, then godot on PATH)")

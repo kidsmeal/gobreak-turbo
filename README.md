@@ -10,8 +10,10 @@ Mutation testing CLI for Godot 4 projects. It changes one line of a GDScript fil
 - Runs mutants in parallel with `--jobs N`, one project copy per worker.
 - Classifies each mutant as `killed`, `survived`, `timeout` or `invalid` (does not compile).
 - Counts a GDScript runtime error (`SCRIPT ERROR`) as killed even when the test command exits `0`.
+- Sorts every survivor as `dead`, `unreached`, `reached` or ruled, from one extra coverage run and a reference scan. Details in `docs/TRIAGE.md`.
+- Records rulings (`equivalent` or `gap`) in `.gobreak/rulings.json`, keyed by line text, so repeat runs sort the same survivors the same way.
 - Works with any test command that exits non-zero on failure: GUT, gdUnit4, or a custom runner.
-- Proves itself with `selfcheck`: a bundled fixture where strong tests must kill every mutant and hollow tests must kill none.
+- Proves itself with `selfcheck`: a bundled fixture where strong tests must kill every reached mutant, triage must find the dead and unreached functions, and hollow tests must kill none.
 
 ## Requirements
 - Python `>= 3.10`, no third-party packages.
@@ -38,7 +40,12 @@ Lists the mutants for `src/health.gd` without starting Godot.
 ```bash
 gobreak run src/health.gd --command "{godot} --headless --path . -s addons/gut/gut_cmdln.gd -gexit -gtest={tests}"
 ```
-Mutates `src/health.gd` and runs the covering GUT tests against each mutant. Exit `0`: no survivors. Exit `1`: survivors listed. Exit `2`: error or failing baseline.
+Mutates `src/health.gd`, runs the covering GUT tests against each mutant, and triages the survivors. Exit `0`: every survivor ruled equivalent, or none. Exit `1`: open survivors listed by status. Exit `2`: error or failing baseline.
+
+```bash
+gobreak rule src/health.gd 42 equivalent --reason "clamp bound is re-applied by the caller"
+```
+Records mutant `#42` as equivalent in `.gobreak/rulings.json`; later runs list it under `ruled equivalent`.
 
 ```bash
 gobreak run res://src/health.gd --command "..." --jobs 4 --lines 40-90 --json report.json
@@ -75,14 +82,18 @@ The command runs with the project copy as its working directory, so use `--path 
 | `--keep-copies` | flag | off | keep the temp project copies; ignored with `--workdir` |
 | `--json` | path | none | write the full report as JSON |
 | `--dry-run` | flag | off | list mutants only |
+| `--no-triage` | flag | off | skip the coverage run and rulings; survivors are listed unsorted |
 
-`selfcheck` reads `--godot` and `--jobs`.
+`rule` takes `target`, `id`, `equivalent` or `gap`, `--reason`, `--clear`, `--clear-stale`, `--project`. `selfcheck` reads `--godot` and `--jobs`.
 
 ## Tests
 See `docs/TESTING.md`.
 
 ## Mutators
 See `docs/MUTATORS.md`.
+
+## Triage
+See `docs/TRIAGE.md`.
 
 ## How it works
 1. `cli.cmd_run` resolves the project root and target, then `mutants.generate` builds the mutant list.
@@ -91,7 +102,8 @@ See `docs/MUTATORS.md`.
 4. `engine.run_session` runs the unmutated baseline; a failing baseline stops the run with exit `2`.
 5. For each mutant, `engine.run_session` writes the mutated line into a copy, runs the command, and writes the original back.
 6. `runner.classify` reads the exit code and Godot's output: `Parse Error:` is `invalid`, a non-zero exit or a new `SCRIPT ERROR` is `killed`, exit `0` is `survived`.
-7. `cli._print_report` prints survivors as `res://path:Lline:col group before -> after` and the kill score.
+7. `engine._triage` matches rulings, runs the tests once with `triage.instrument` markers before unruled survivor lines, and sorts survivors with `triage.count_references`.
+8. `cli._print_report` prints the kill score and survivors grouped by triage status.
 
 ## License
 MIT. See `LICENSE`.

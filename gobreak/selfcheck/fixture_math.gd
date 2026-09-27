@@ -1,7 +1,9 @@
 extends RefCounted
 
-## Self-check target. tests/test_fixture_strong.gd kills every mutant of
-## this file; tests/test_fixture_hollow.gd kills none.
+## Self-check target. tests/test_fixture_strong.gd kills every mutant the
+## tests reach; tests/test_fixture_hollow.gd kills none. Triage must report
+## unused_double as dead (no reference) and only_called_by_caller as
+## unreached (referenced by fixture_caller.gd, never run by a test).
 
 
 static func over_cap(a: int, b: int, cap: int) -> bool:
@@ -23,3 +25,11 @@ static func scaled(values: Array[int], factor: int) -> Array[int]:
 	for v in values:
 		out.append(v * factor)
 	return out
+
+
+static func unused_double(n: int) -> int:
+	return n * 2
+
+
+static func only_called_by_caller(n: int) -> int:
+	return n + 1

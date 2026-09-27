@@ -12,6 +12,7 @@ from typing import Callable
 from . import mutants as mut
 from . import project as proj
 from . import runner
+from . import triage
 
 
 class SessionError(Exception):
@@ -23,6 +24,8 @@ class MutantResult:
     mutant: mut.Mutant
     status: str
     seconds: float
+    triage: str | None = None  # survivors only: one of the triage.* statuses
+    ruling: triage.Ruling | None = None
 
 
 @dataclass
@@ -33,9 +36,23 @@ class Session:
     baseline_seconds: float
     timeout: float
     results: list[MutantResult] = field(default_factory=list)
+    triaged: bool = False
+    triage_note: str | None = None
+    stale_rulings: list[triage.Ruling] = field(default_factory=list)
 
     def count(self, status: str) -> int:
         return sum(1 for r in self.results if r.status == status)
+
+    def survivors(self, triage_status: str | None = None) -> list[MutantResult]:
+        return [
+            r for r in self.results
+            if r.status == runner.SURVIVED and (triage_status is None or r.triage == triage_status)
+        ]
+
+    @property
+    def open_survivors(self) -> list[MutantResult]:
+        """Survivors not ruled equivalent: the ones still owed a fix."""
+        return [r for r in self.survivors() if r.triage != triage.RULED_EQUIVALENT]
 
     @property
     def score(self) -> float | None:
@@ -58,6 +75,8 @@ def run_session(
     lines: tuple[int, int] | None = None,
     on_result: Callable[[MutantResult, int, int], None] | None = None,
     on_status: Callable[[str], None] | None = None,
+    triage_enabled: bool = True,
+    test_patterns: list[str] | None = None,
 ) -> Session:
     say = on_status or (lambda _msg: None)
     source = target.read_bytes().decode("utf-8")
@@ -123,6 +142,10 @@ def run_session(
 
         with ThreadPoolExecutor(max_workers=len(copies)) as ex:
             session.results = list(ex.map(run_one, all_mutants))
+
+        if triage_enabled:
+            _triage(session, project, target, source, copies[0], rel, command, limit,
+                    test_patterns or list(proj.DEFAULT_TEST_PATTERNS), say)
         return session
     finally:
         # --workdir copies persist for the next run's incremental sync.
@@ -132,3 +155,67 @@ def run_session(
                     say(f"kept copy: {c}")
                 else:
                     proj.remove_tree(c.parent)
+
+
+def _triage(
+    session: Session,
+    project: Path,
+    target: Path,
+    source: str,
+    copy_root: Path,
+    rel: Path,
+    command: str,
+    limit: float,
+    test_patterns: list[str],
+    say: Callable[[str], None],
+) -> None:
+    """Sort survivors by rulings, then by one instrumented coverage run."""
+    copy_target = copy_root / rel
+    session.triaged = True
+    rulings = [r for r in triage.load_rulings(project) if r.file == session.target]
+    by_key = {(session.target, r.mutant.before, r.mutant.after): r for r in session.results}
+    for ruling in rulings:
+        res = by_key.get(ruling.key())
+        if res is None or res.status != runner.SURVIVED:
+            session.stale_rulings.append(ruling)
+        else:
+            res.ruling = ruling
+            res.triage = triage.RULED_EQUIVALENT if ruling.ruling == triage.EQUIVALENT else triage.RULED_GAP
+
+    unruled = [r for r in session.survivors() if r.triage is None]
+    if not unruled:
+        return
+
+    say("triage run (line coverage)")
+    instrumented, marked = triage.instrument(source, {r.mutant.line for r in unruled})
+    original = copy_target.read_bytes()
+    try:
+        copy_target.write_bytes(instrumented.encode("utf-8"))
+        run = runner.run_command(command, str(copy_root), limit)
+    finally:
+        copy_target.write_bytes(original)
+
+    if run.timed_out or run.exit_code != 0:
+        session.triage_note = (
+            f"triage run failed (exit {run.exit_code}, timed out {run.timed_out}); "
+            "unruled survivors marked reached"
+        )
+        for r in unruled:
+            r.triage = triage.REACHED
+        return
+
+    hits = triage.hits_from_output(run.output)
+    infos = triage.analyze(source)
+    refs: dict[str, int] = {}
+    for r in unruled:
+        line = r.mutant.line
+        if line not in marked or line in hits:
+            r.triage = triage.REACHED
+            continue
+        func = infos[line - 1].func
+        if func is None or triage.is_engine_callback(func):
+            r.triage = triage.UNREACHED
+            continue
+        if func not in refs:
+            refs[func] = triage.count_references(project, target, func, source, test_patterns)
+        r.triage = triage.DEAD if refs[func] == 0 else triage.UNREACHED
