@@ -143,7 +143,7 @@ def copy_project(project: Path, excludes: list[str], parent: Path | None = None)
     re-import. `.git/` and every name in `excludes` are skipped.
     """
     skip = set(ALWAYS_EXCLUDED) | set(excludes)
-    base = Path(tempfile.mkdtemp(prefix="godot-mutation-", dir=parent))
+    base = Path(tempfile.mkdtemp(prefix="gobreak-", dir=parent))
     dest = base / project.name
 
     def ignore(_dir: str, names: list[str]) -> set[str]:

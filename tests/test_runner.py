@@ -2,7 +2,7 @@ import os
 import sys
 import unittest
 
-from godot_mutation import runner
+from gobreak import runner
 
 
 def result(exit_code=0, output="", timed_out=False):

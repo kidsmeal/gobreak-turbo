@@ -4,4 +4,4 @@ build/
 dist/
 .venv/
 venv/
-godot_mutation/selfcheck/.godot/
+gobreak/selfcheck/.godot/

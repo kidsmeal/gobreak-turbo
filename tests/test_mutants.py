@@ -1,6 +1,6 @@
 import unittest
 
-from godot_mutation import mutants as mut
+from gobreak import mutants as mut
 
 
 def after_lines(source: str) -> list[str]:

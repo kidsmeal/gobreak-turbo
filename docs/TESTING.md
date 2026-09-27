@@ -8,9 +8,9 @@ Stdlib only, no Godot needed. Covers masking, every mutator, line skip rules, co
 
 ## Self-check
 ```bash
-python -m godot_mutation selfcheck
+python -m gobreak selfcheck
 ```
-Needs Godot `4.x` (`--godot`, `$GODOT` or `godot` on `PATH`). Runs `godot_mutation/selfcheck/fixture_math.gd` against two test files:
+Needs Godot `4.x` (`--godot`, `$GODOT` or `godot` on `PATH`). Runs `gobreak/selfcheck/fixture_math.gd` against two test files:
 - `tests/test_fixture_strong.gd` must kill every mutant.
 - `tests/test_fixture_hollow.gd` must kill none.
 

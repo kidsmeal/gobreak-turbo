@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "godot-mutation"
+name = "gobreak-turbo"
 dynamic = ["version"]
 description = "Mutation testing for GDScript: change one line at a time, rerun the tests, report changes no test caught."
 readme = "README.md"
@@ -17,13 +17,13 @@ classifiers = [
 ]
 
 [project.scripts]
-godot-mutation = "godot_mutation.cli:main"
+gobreak = "gobreak.cli:main"
 
 [tool.setuptools]
-packages = ["godot_mutation"]
+packages = ["gobreak"]
 
 [tool.setuptools.dynamic]
-version = { attr = "godot_mutation.__version__" }
+version = { attr = "gobreak.__version__" }
 
 [tool.setuptools.package-data]
-godot_mutation = ["selfcheck/*.gd", "selfcheck/project.godot", "selfcheck/tests/*.gd"]
+gobreak = ["selfcheck/*.gd", "selfcheck/project.godot", "selfcheck/tests/*.gd"]

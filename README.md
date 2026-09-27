@@ -1,4 +1,4 @@
-# godot-mutation
+# GoBreak Turbo
 
 Mutation testing CLI for Godot 4 projects. It changes one line of a GDScript file at a time, reruns your tests, and lists the changes no test caught.
 
@@ -26,22 +26,22 @@ pip install .
 
 ## Usage
 ```bash
-godot-mutation selfcheck
+gobreak selfcheck
 ```
 Runs the bundled fixture twice and exits `0` when strong tests kill every mutant and hollow tests leave survivors.
 
 ```bash
-godot-mutation run src/health.gd --dry-run
+gobreak run src/health.gd --dry-run
 ```
 Lists the mutants for `src/health.gd` without starting Godot.
 
 ```bash
-godot-mutation run src/health.gd --command "{godot} --headless --path . -s addons/gut/gut_cmdln.gd -gexit -gtest={tests}"
+gobreak run src/health.gd --command "{godot} --headless --path . -s addons/gut/gut_cmdln.gd -gexit -gtest={tests}"
 ```
 Mutates `src/health.gd` and runs the covering GUT tests against each mutant. Exit `0`: no survivors. Exit `1`: survivors listed. Exit `2`: error or failing baseline.
 
 ```bash
-godot-mutation run res://src/health.gd --command "..." --jobs 4 --lines 40-90 --json report.json
+gobreak run res://src/health.gd --command "..." --jobs 4 --lines 40-90 --json report.json
 ```
 Mutates lines `40`-`90` only, 4 workers, full report written to `report.json`.
 

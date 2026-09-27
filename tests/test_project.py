@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from godot_mutation import project as proj
+from gobreak import project as proj
 
 
 class ProjectTest(unittest.TestCase):

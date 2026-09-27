@@ -214,7 +214,7 @@ def cmd_selfcheck(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="godot-mutation",
+        prog="gobreak",
         description="Mutation testing for GDScript: change one line at a time, rerun the tests, report changes no test caught.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")

@@ -1,0 +1,7 @@
+; Self-check fixture project for GoBreak Turbo.
+
+config_version=5
+
+[application]
+
+config/name="GoBreak Turbo selfcheck"
