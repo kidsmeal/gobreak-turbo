@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "godot-mutation"
+dynamic = ["version"]
+description = "Mutation testing for GDScript: change one line at a time, rerun the tests, report changes no test caught."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dependencies = []
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Games/Entertainment",
+]
+
+[project.scripts]
+godot-mutation = "godot_mutation.cli:main"
+
+[tool.setuptools]
+packages = ["godot_mutation"]
+
+[tool.setuptools.dynamic]
+version = { attr = "godot_mutation.__version__" }
+
+[tool.setuptools.package-data]
+godot_mutation = ["selfcheck/*.gd", "selfcheck/project.godot", "selfcheck/tests/*.gd"]

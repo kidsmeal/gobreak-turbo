@@ -1,0 +1,7 @@
+; Self-check fixture project for godot-mutation.
+
+config_version=5
+
+[application]
+
+config/name="godot-mutation selfcheck"
