@@ -72,7 +72,7 @@ def run_session(
     excludes: list[str] | None = None,
     keep_copies: bool = False,
     workdir: Path | None = None,
-    lines: tuple[int, int] | None = None,
+    only_lines: set[int] | None = None,
     on_result: Callable[[MutantResult, int, int], None] | None = None,
     on_status: Callable[[str], None] | None = None,
     triage_enabled: bool = True,
@@ -81,8 +81,8 @@ def run_session(
     say = on_status or (lambda _msg: None)
     source = target.read_bytes().decode("utf-8")
     all_mutants = mut.generate(source)
-    if lines is not None:
-        all_mutants = [m for m in all_mutants if lines[0] <= m.line <= lines[1]]
+    if only_lines is not None:
+        all_mutants = [m for m in all_mutants if m.line in only_lines]
     target_res = proj.to_res(project, target)
     rel = target.resolve().relative_to(project.resolve())
     command = runner.build_command(command_template, godot, tests)

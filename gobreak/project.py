@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -79,6 +80,44 @@ def find_covering_tests(
                 if any(n.search(text) for n in needles):
                     found.append(to_res(project, path))
     return sorted(set(found))
+
+
+_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.M)
+
+
+def changed_lines(project: Path, target: Path, ref: str) -> set[int] | None:
+    """Lines of `target` changed between `ref` and the working tree.
+
+    Covers committed, staged and unstaged edits. Returns None when git does
+    not track the file (every line counts as changed). Raises ValueError
+    when git is missing, the project is not a repository, or `ref` is bad.
+    """
+    rel = target.resolve().relative_to(project.resolve()).as_posix()
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        try:
+            return subprocess.run(
+                ["git", "-C", str(project), *args],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+            )
+        except FileNotFoundError as exc:
+            raise ValueError("git not found on PATH") from exc
+
+    if git("rev-parse", "--is-inside-work-tree").returncode != 0:
+        raise ValueError(f"not a git repository: {project}")
+    if git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").returncode != 0:
+        raise ValueError(f"unknown git ref: {ref}")
+    if git("ls-files", "--error-unmatch", rel).returncode != 0:
+        return None
+    diff = git("diff", "--unified=0", "--no-color", "--no-ext-diff", ref, "--", rel)
+    if diff.returncode != 0:
+        raise ValueError(f"git diff failed: {diff.stderr.strip()}")
+    lines: set[int] = set()
+    for m in _HUNK.finditer(diff.stdout):
+        start = int(m.group(1))
+        count = int(m.group(2)) if m.group(2) is not None else 1
+        lines.update(range(start, start + count))
+    return lines
 
 
 def _make_writable(func, path, _exc):

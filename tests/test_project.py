@@ -1,3 +1,4 @@
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -64,6 +65,50 @@ class ProjectTest(unittest.TestCase):
         self.assertEqual((dest / "src/health.gd").read_text(), "class_name Health\nextends Node\n")
         self.assertFalse((dest / "stale.gd").exists())
         self.assertFalse((dest / "stale_dir").exists())
+
+
+class ChangedLinesTest(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        (self.root / "project.godot").write_text("config_version=5\n")
+        self.target = self.root / "grid.gd"
+        self.target.write_text("a = 1\nb = 2\nc = 3\nd = 4\n")
+        self.git("init", "-q")
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "base")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def git(self, *args):
+        subprocess.run(
+            ["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "core.autocrlf=false", *args],
+            cwd=self.root, check=True, capture_output=True,
+        )
+
+    def test_edited_and_added_lines_are_reported(self):
+        self.target.write_text("a = 1\nb = 20\nc = 3\nd = 4\ne = 5\n")
+        self.assertEqual(proj.changed_lines(self.root, self.target, "HEAD"), {2, 5})
+
+    def test_committed_changes_count_against_an_older_ref(self):
+        self.target.write_text("a = 10\nb = 2\nc = 3\nd = 4\n")
+        self.git("commit", "-q", "-am", "edit")
+        self.assertEqual(proj.changed_lines(self.root, self.target, "HEAD~1"), {1})
+        self.assertEqual(proj.changed_lines(self.root, self.target, "HEAD"), set())
+
+    def test_pure_deletion_changes_no_current_line(self):
+        self.target.write_text("a = 1\nc = 3\nd = 4\n")
+        self.assertEqual(proj.changed_lines(self.root, self.target, "HEAD"), set())
+
+    def test_untracked_file_means_every_line(self):
+        other = self.root / "new.gd"
+        other.write_text("x = 1\n")
+        self.assertIsNone(proj.changed_lines(self.root, other, "HEAD"))
+
+    def test_bad_ref_raises(self):
+        with self.assertRaises(ValueError):
+            proj.changed_lines(self.root, self.target, "no-such-ref")
 
 
 if __name__ == "__main__":

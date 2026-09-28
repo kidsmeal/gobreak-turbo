@@ -52,6 +52,11 @@ gobreak run res://src/health.gd --command "..." --jobs 4 --lines 40-90 --json re
 ```
 Mutates lines `40`-`90` only, 4 workers, full report written to `report.json`.
 
+```bash
+gobreak run src/health.gd --command "..." --changed-since main
+```
+Mutates only the lines of `src/health.gd` changed since `main`, including uncommitted edits. A deletion-only change produces no mutants.
+
 `--command` placeholders:
 
 | Placeholder | Becomes |
@@ -77,6 +82,7 @@ The command runs with the project copy as its working directory, so use `--path 
 | `--jobs` | int | `1` | parallel workers; each makes its own project copy |
 | `--timeout` | float | `3 x baseline + 10` s | seconds per mutant run; a timeout is re-run once before it counts |
 | `--lines` | `A-B` | all | mutate lines `A` to `B` only |
+| `--changed-since` | git ref | none | mutate only lines changed since the ref, uncommitted edits included; an untracked file counts as all lines; combines with `--lines` |
 | `--exclude` | name, repeatable | none | directory or file name left out of the copy; `.git` is always left out |
 | `--workdir` | path | temp dir, deleted after the run | keep project copies here; later runs copy only files whose size or mtime changed. Must be outside the project |
 | `--keep-copies` | flag | off | keep the temp project copies; ignored with `--workdir` |

@@ -156,12 +156,33 @@ def _write_json(session: engine.Session, path: str) -> None:
     Path(path).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
+def _selected_lines(args: argparse.Namespace, root: Path, target: Path, source: str) -> set[int] | None:
+    """Lines to mutate from --lines and --changed-since; None means all."""
+    selected: set[int] | None = None
+    if args.lines:
+        selected = set(range(args.lines[0], args.lines[1] + 1))
+    if args.changed_since:
+        try:
+            changed = proj.changed_lines(root, target, args.changed_since)
+        except ValueError as exc:
+            raise engine.SessionError(f"--changed-since: {exc}") from exc
+        if changed is None:
+            print(f"{proj.to_res(root, target)} is not tracked by git; every line counts as changed")
+        else:
+            selected = changed if selected is None else selected & changed
+    return selected
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     root, target = _resolve_target(args.target, args.project)
     source = target.read_bytes().decode("utf-8")
+    only_lines = _selected_lines(args, root, target, source)
     found = mut.generate(source)
-    if args.lines:
-        found = [m for m in found if args.lines[0] <= m.line <= args.lines[1]]
+    if only_lines is not None:
+        found = [m for m in found if m.line in only_lines]
+    if args.changed_since:
+        changed = "all" if only_lines is None else len(only_lines)
+        print(f"lines changed since {args.changed_since}: {changed}")
 
     if args.dry_run:
         for m in found:
@@ -204,7 +225,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         excludes=args.exclude,
         keep_copies=args.keep_copies,
         workdir=Path(args.workdir).resolve() if args.workdir else None,
-        lines=args.lines,
+        only_lines=only_lines,
         on_result=_print_result,
         on_status=lambda msg: print(msg, flush=True),
         triage_enabled=not args.no_triage,
@@ -318,6 +339,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--jobs", type=int, default=1, help="parallel workers, one project copy each (default: 1)")
     run.add_argument("--timeout", type=float, help="seconds per mutant run (default: 3 x baseline + 10)")
     run.add_argument("--lines", type=_lines, help="only mutate lines A-B (1-based, inclusive)")
+    run.add_argument("--changed-since", metavar="REF",
+                     help="only mutate lines changed since this git ref, uncommitted edits included")
     run.add_argument("--exclude", action="append", default=[], help="directory or file name left out of the project copy; repeatable")
     run.add_argument("--workdir", help="keep project copies here between runs; later runs copy only changed files")
     run.add_argument("--keep-copies", action="store_true", help="keep the temp project copies after the run")
