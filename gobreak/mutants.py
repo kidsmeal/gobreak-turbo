@@ -35,6 +35,13 @@ _NO_DELETE_START = re.compile(
     r"break|continue|if|elif|else|for|while|match|breakpoint)\b|^\s*@"
 )
 
+# A line that is only a logging call changes nothing but output text, so no
+# mutant is generated on it.
+_LOG_ONLY = re.compile(
+    r"^\s*(?:print|printerr|prints|printt|printraw|print_rich|print_debug|print_verbose|"
+    r"push_error|push_warning)\s*\([^;]*\)\s*;?\s*$"
+)
+
 _OP_TOKEN = re.compile(
     r"\*\*=|<<=|>>=|\*\*|<<|>>|->|==|!=|<=|>=|\+=|-=|\*=|/=|%=|&=|\|=|\^=|&&|\|\||:=|[<>+\-*/%!=&|^~]"
 )
@@ -180,6 +187,8 @@ def generate(source: str) -> list[Mutant]:
             continue
         if in_decl:
             in_decl = ends_inside
+            continue
+        if not starts_inside and not ends_inside and _LOG_ONLY.match(masked):
             continue
 
         ignored = _ignored_groups(raw, comments.get(li))

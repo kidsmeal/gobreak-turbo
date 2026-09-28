@@ -130,6 +130,19 @@ class LineRuleTest(unittest.TestCase):
         )
         self.assertNotIn("del", all_groups(src))
 
+    def test_logging_only_lines_get_no_mutants(self):
+        src = (
+            "func f(a):\n"
+            '\tpush_error("grew from %d to %d" % [a, a + 1])\n'
+            '\tprint("x", a * 2)\n'
+            "\tvar y = a + 1\n"
+        )
+        self.assertEqual({m.line for m in mut.generate(src)}, {4})
+
+    def test_logging_call_inside_a_larger_statement_is_still_mutated(self):
+        self.assertIn("arith", all_groups('x = a + 1; print("x")'))
+        self.assertIn("arith", all_groups('print("x"); y = a + 1'))
+
     def test_ignore_tag_skips_every_group(self):
         self.assertEqual(all_groups("x = a + 1  # mutation: ignore"), [])
 

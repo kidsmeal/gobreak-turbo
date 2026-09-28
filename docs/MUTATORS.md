@@ -18,6 +18,7 @@ Every mutant changes one line. Group names are the names `# mutation: ignore=<gr
 - Declaration lines and their continuation lines: `func`, `static func`, `class`, `class_name`, `extends`, `signal`, `enum`, and any line starting with `@`. Default argument values and `@export` defaults are therefore not mutated.
 - `**`, `<<`, `>>`, `->`, `%`, bitwise operators, unary `+` and `-`.
 - Numbers inside identifiers (`p1`, `Vector2i`), hex and binary literals, exponent floats (`1e5`).
+- A single-line statement that is only a logging call: `print`, `printerr`, `prints`, `printt`, `printraw`, `print_rich`, `print_debug`, `print_verbose`, `push_error`, `push_warning`. Its only effect is output text. A condition guarding the call is still mutated.
 
 ## Statement deletion never removes
 - `return`, `var`, `const`, `static`, `pass`, `break`, `continue`, `breakpoint`.
