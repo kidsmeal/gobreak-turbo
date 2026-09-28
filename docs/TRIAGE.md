@@ -13,10 +13,12 @@ A survivor is a mutant that no test failed on. Triage sorts every survivor into 
 `gobreak run` exits `1` while any survivor is not `ruled-equivalent`.
 
 ## Line coverage
-- After the mutant runs, `gobreak` runs the tests once more with a marker before every unruled survivor line.
+- Before any mutant runs, each selected test file runs alone against a copy with a marker before every mutated line. This is the coverage map; it also picks the tests each mutant runs.
 - The marker prints `__GB_HIT_<line>__` once per process (`Engine.set_meta` guard), so hot loops add one line of output.
-- Lines that cannot take a marker count as `reached`: class-level lines (they run at load), `elif` / `else` lines, `match` patterns, continuation lines of a multi-line statement.
-- If the coverage run fails or times out, every unruled survivor is `reached` and the report prints a `note:` line.
+- A mutant on a line no test reaches is a survivor without a run (`tests_run: 0` in the JSON).
+- A test file that fails when run alone is kept for every mutant and named in a `note:` line.
+- Lines that cannot take a marker count as `reached` and run every selected test: class-level lines (they run at load), `elif` / `else` lines, `match` patterns, continuation lines of a multi-line statement.
+- Without `{tests}` in the command, or with `--no-coverage-selection`, triage runs the tests once after the mutants with markers before the unruled survivor lines. If that run fails or times out, every unruled survivor is `reached` and the report prints a `note:` line.
 
 ## References
 - A function is referenced when its name appears as a whole word in a `.gd`, `.tscn` or `.tres` file.

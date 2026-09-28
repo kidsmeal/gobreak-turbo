@@ -1,19 +1,16 @@
 # GoBreak Turbo
 
-Mutation testing CLI for Godot 4 projects. It changes one line of a GDScript file at a time, reruns your tests, and lists the changes no test caught.
+Mutation testing CLI for Godot 4 projects. It changes one line of GDScript at a time, reruns your tests, and lists the changes no test caught.
 
 ## What it does
-- Generates single-line mutants for a `.gd` file: comparison, arithmetic, logic, `not`, bool, number, `if` negation, statement deletion. Full list in `docs/MUTATORS.md`.
-- Skips text inside strings and comments, declaration lines, and lines tagged `# mutation: ignore`.
-- Auto-selects the test files that name the target's `class_name` or `res://` path.
-- Runs each mutant in a temp copy of the project; your working tree is never written.
-- Runs mutants in parallel with `--jobs N`, one project copy per worker.
-- Classifies each mutant as `killed`, `survived`, `timeout` or `invalid` (does not compile).
+- Generates single-line mutants: comparison, arithmetic, logic, `not`, bool, number, `if` negation, statement deletion. Full list in `docs/MUTATORS.md`.
+- Runs each mutant in a copy of the project; your working tree is never written.
+- Maps which test file reaches which line, then runs only those tests per mutant.
+- Mutates a file, a whole directory, or only the lines changed since a git ref.
 - Counts a GDScript runtime error (`SCRIPT ERROR`) as killed even when the test command exits `0`.
-- Sorts every survivor as `dead`, `unreached`, `reached` or ruled, from one extra coverage run and a reference scan. Details in `docs/TRIAGE.md`.
-- Records rulings (`equivalent` or `gap`) in `.gobreak/rulings.json`, keyed by line text, so repeat runs sort the same survivors the same way.
-- Works with any test command that exits non-zero on failure: GUT, gdUnit4, or a custom runner.
-- Proves itself with `selfcheck`: a bundled fixture where strong tests must kill every reached mutant, triage must find the dead and unreached functions, and hollow tests must kill none.
+- Sorts survivors as `dead`, `unreached`, `reached` or ruled, and records rulings in `.gobreak/rulings.json`. Details in `docs/TRIAGE.md`.
+- Works with any test command that exits non-zero on failure.
+- Proves itself with `selfcheck` on a bundled fixture of strong and hollow tests.
 
 ## Requirements
 - Python `>= 3.10`, no third-party packages.
@@ -30,67 +27,25 @@ pip install .
 ```bash
 gobreak selfcheck
 ```
-Runs the bundled fixture twice and exits `0` when strong tests kill every mutant and hollow tests leave survivors.
+Exits `0` when the tool tells the bundled strong tests from the hollow ones.
 
 ```bash
-gobreak run src/health.gd --dry-run
+gobreak run src/health.gd
 ```
-Lists the mutants for `src/health.gd` without starting Godot.
+Mutates `src/health.gd` with the command from `.gobreak/config.json`. Exit `0`: no open survivors. Exit `1`: survivors listed by status. Exit `2`: error or failing baseline.
 
 ```bash
-gobreak run src/health.gd --command "{godot} --headless --path . -s addons/gut/gut_cmdln.gd -gexit -gtest={tests}"
+gobreak run src/ --changed-since main
 ```
-Mutates `src/health.gd`, runs the covering GUT tests against each mutant, and triages the survivors. Exit `0`: every survivor ruled equivalent, or none. Exit `1`: open survivors listed by status. Exit `2`: error or failing baseline.
+Mutates the lines changed since `main` in every non-test `.gd` file under `src/`, then prints a per-file summary.
 
 ```bash
 gobreak rule src/health.gd 42 equivalent --reason "clamp bound is re-applied by the caller"
 ```
-Records mutant `#42` as equivalent in `.gobreak/rulings.json`; later runs list it under `ruled equivalent`.
-
-```bash
-gobreak run res://src/health.gd --command "..." --jobs 4 --lines 40-90 --json report.json
-```
-Mutates lines `40`-`90` only, 4 workers, full report written to `report.json`.
-
-```bash
-gobreak run src/health.gd --command "..." --changed-since main
-```
-Mutates only the lines of `src/health.gd` changed since `main`, including uncommitted edits. A deletion-only change produces no mutants.
-
-`--command` placeholders:
-
-| Placeholder | Becomes |
-|---|---|
-| `{godot}` | the Godot executable, quoted |
-| `{tests}` | selected test paths joined by `,` |
-| `{tests:FLAG}` | `FLAG path` once per selected test, for runners that repeat a flag |
-
-The command runs with the project copy as its working directory, so use `--path .`.
+Records mutant `#42` as equivalent; later runs list it under `ruled equivalent`.
 
 ## Configuration
-
-| Key | Type | Default | Effect |
-|---|---|---|---|
-| `target` | path | required | `.gd` file to mutate: a file path or a `res://` path |
-| `--command` | string | required for `run` | test command template |
-| `--project` | path | nearest `project.godot` above the target | Godot project directory |
-| `--godot` | path | `$GODOT`, then `godot` | Godot executable |
-| `--tests` | csv | auto-select | `res://` test paths to run; disables auto-select |
-| `--skip-tests` | csv | none | drop auto-selected tests whose path contains any entry |
-| `--test-dirs` | csv | `test,tests` | directories searched recursively for tests |
-| `--test-patterns` | csv | `test_*.gd,*_test.gd,*Test.gd` | test file name globs |
-| `--jobs` | int | `1` | parallel workers; each makes its own project copy |
-| `--timeout` | float | `3 x baseline + 10` s | seconds per mutant run; a timeout is re-run once before it counts |
-| `--lines` | `A-B` | all | mutate lines `A` to `B` only |
-| `--changed-since` | git ref | none | mutate only lines changed since the ref, uncommitted edits included; an untracked file counts as all lines; combines with `--lines` |
-| `--exclude` | name, repeatable | none | directory or file name left out of the copy; `.git` is always left out |
-| `--workdir` | path | temp dir, deleted after the run | keep project copies here; later runs copy only files whose size or mtime changed. Must be outside the project |
-| `--keep-copies` | flag | off | keep the temp project copies; ignored with `--workdir` |
-| `--json` | path | none | write the full report as JSON |
-| `--dry-run` | flag | off | list mutants only |
-| `--no-triage` | flag | off | skip the coverage run and rulings; survivors are listed unsorted |
-
-`rule` takes `target`, `id`, `equivalent` or `gap`, `--reason`, `--clear`, `--clear-stale`, `--project`. `selfcheck` reads `--godot` and `--jobs`.
+See `docs/CONFIGURATION.md` for the config file, every flag, and the `{tests}` placeholders.
 
 ## Tests
 See `docs/TESTING.md`.
@@ -102,14 +57,14 @@ See `docs/MUTATORS.md`.
 See `docs/TRIAGE.md`.
 
 ## How it works
-1. `cli.cmd_run` resolves the project root and target, then `mutants.generate` builds the mutant list.
+1. `cli.cmd_run` merges `.gobreak/config.json` with flags and collects targets; `mutants.generate` builds each file's mutants.
 2. `project.find_covering_tests` picks test files that name the target's `class_name` or `res://` path.
-3. `project.copy_project` copies the project, `.godot/` import cache included, once per job; with `--workdir`, `project.sync_project` updates a kept copy instead.
-4. `engine.run_session` runs the unmutated baseline; a failing baseline stops the run with exit `2`.
-5. For each mutant, `engine.run_session` writes the mutated line into a copy, runs the command, and writes the original back.
-6. `runner.classify` reads the exit code and Godot's output: `Parse Error:` is `invalid`, a non-zero exit or a new `SCRIPT ERROR` is `killed`, exit `0` is `survived`.
-7. `engine._triage` matches rulings, runs the tests once with `triage.instrument` markers before unruled survivor lines, and sorts survivors with `triage.count_references`.
-8. `cli._print_report` prints the kill score and survivors grouped by triage status.
+3. `engine.Workspace` copies the project once per job, or syncs kept copies with `--workdir`.
+4. `engine.run_session` runs the unmutated baseline; a failing baseline stops that file with exit `2`.
+5. `engine._build_coverage` runs each test file alone against a copy with `triage.instrument` markers, recording which lines it reaches.
+6. Each mutant runs only the tests that reach its line; a line no test reaches is a survivor without a run.
+7. `runner.classify` reads the exit code and output: `Parse Error:` is `invalid`, a non-zero exit or a new `SCRIPT ERROR` is `killed`, exit `0` is `survived`.
+8. `engine._triage` applies rulings and sorts survivors with the coverage map and `triage.count_references`.
 
 ## License
 MIT. See `LICENSE`.

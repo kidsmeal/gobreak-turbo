@@ -4,7 +4,7 @@
 ```bash
 python -m unittest discover -s tests -t .
 ```
-Stdlib only, no Godot needed. Covers masking, every mutator, line skip rules, command templates, result classification, process timeout, test selection and project copies.
+Stdlib only, no Godot needed; `git` is needed for the `--changed-since` cases. Covers masking, every mutator, line skip rules, command templates, result classification, process timeout, test selection, project copies, changed-line detection, the config file, directory target collection and the coverage map.
 
 ## Self-check
 ```bash
