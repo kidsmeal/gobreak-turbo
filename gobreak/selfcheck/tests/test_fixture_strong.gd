@@ -23,6 +23,11 @@ func test_both_positive() -> void:
 	check(FixtureMath.both_positive(1, 0) == false, "0 is not positive")
 
 
+func test_safe_div() -> void:
+	check(FixtureMath.safe_div(8, 2) == 4, "8 / 2")
+	check(FixtureMath.safe_div(8, 1) == 8, "8 / 1")
+
+
 func test_scaled() -> void:
 	var result: Array[int] = FixtureMath.scaled([2, 3], 4)
 	check(result.size() == 2, "two values in, two out")

@@ -11,7 +11,7 @@ Stdlib only, no Godot needed; `git` is needed for the `--changed-since` cases. C
 python -m gobreak selfcheck
 ```
 Needs Godot `4.x` (`--godot`, `$GODOT` or `godot` on `PATH`). Runs `gobreak/selfcheck/fixture_math.gd` against two test files:
-- `tests/test_fixture_strong.gd` must kill every reached mutant. Triage must report `unused_double` as `dead` and `only_called_by_caller` as `unreached` (referenced only by `fixture_caller.gd`).
+- `tests/test_fixture_strong.gd` must kill every reached mutant. Triage must report `unused_double` as `dead`, `only_called_by_caller` as `unreached` (referenced only by `fixture_caller.gd`), and `safe_div`'s untaken `b == 0` branch as `unreached` (the function ran; no game code calls it).
 - `tests/test_fixture_hollow.gd` must kill none and leave `reached` survivors.
 
 Exit `0` means the tool can tell a test that checks results from one that only runs the code. Exit `2` names which half failed.

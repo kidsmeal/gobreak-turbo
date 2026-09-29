@@ -19,5 +19,9 @@ func test_both_positive_runs() -> void:
 	check(typeof(FixtureMath.both_positive(1, 1)) == TYPE_BOOL, "returns a bool")
 
 
+func test_safe_div_runs() -> void:
+	check(typeof(FixtureMath.safe_div(8, 2)) == TYPE_INT, "returns an int")
+
+
 func test_scaled_runs() -> void:
 	check(typeof(FixtureMath.scaled([2, 3], 4)) == TYPE_ARRAY, "returns an Array")

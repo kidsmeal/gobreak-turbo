@@ -4,8 +4,8 @@ A survivor is a mutant that no test failed on. Triage sorts every survivor into 
 
 | Status | Rule | Action |
 |---|---|---|
-| `dead` | the line never ran during the tests, and its function has no reference in non-test code | delete the code |
-| `unreached` | the line never ran, and non-test code references its function (or it is an engine callback) | add a test that runs it |
+| `dead` | the line's whole function never ran during the tests, and it has no reference in non-test code | delete the code |
+| `unreached` | the line never ran, and either its function ran (a branch no test takes), non-test code references it, or it is an engine callback | add a test that runs it |
 | `reached` | the line ran during the tests and no test failed | rule it: `equivalent` or `gap` |
 | `ruled-gap` | a ruling records it as a missing test | write the test |
 | `ruled-equivalent` | a ruling records it as no behavior change | none |
@@ -14,6 +14,7 @@ A survivor is a mutant that no test failed on. Triage sorts every survivor into 
 
 ## Line coverage
 - Before any mutant runs, each selected test file runs alone against a copy with a marker before every mutated line. This is the coverage map; it also picks the tests each mutant runs.
+- Each function holding a mutant also gets a marker on its first body line, which records whether the function ran at all. A function that only tests call, like a test-facing getter, is never `dead`.
 - The marker prints `__GB_HIT_<line>__` once per process (`Engine.set_meta` guard), so hot loops add one line of output.
 - A mutant on a line no test reaches is a survivor without a run (`tests_run: 0` in the JSON).
 - A test file that fails when run alone is kept for every mutant and named in a `note:` line.

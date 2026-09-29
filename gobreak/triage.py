@@ -54,6 +54,7 @@ _ELSE_LINE = re.compile(r"^\s*(elif|else)\b")
 class LineInfo:
     func: str | None  # innermost enclosing named function
     markable: bool  # a marker statement can be inserted before this line
+    func_line: int | None = None  # 1-based line of that function's `func` keyword
 
 
 def analyze(source: str) -> list[LineInfo]:
@@ -61,9 +62,13 @@ def analyze(source: str) -> list[LineInfo]:
     masked_text, multiline, _ = mut.mask(source)
     masked_lines = masked_text.split("\n")
     infos: list[LineInfo] = []
-    stack: list[tuple[int, str, str | None]] = []  # (indent, kind, func name)
+    # (indent, kind, func name, func line)
+    stack: list[tuple[int, str, str | None, int | None]] = []
     depth = 0
     continuation = False
+
+    def enclosing() -> tuple[str | None, int | None]:
+        return next(((name, line) for _, kind, name, line in reversed(stack) if kind == "func"), (None, None))
 
     for li, masked_full in enumerate(masked_lines):
         masked = masked_full.rstrip("\r")
@@ -73,21 +78,21 @@ def analyze(source: str) -> list[LineInfo]:
 
         stripped = masked.strip()
         if not stripped or starts_inside:
-            func = next((name for _, kind, name in reversed(stack) if kind == "func"), None)
-            infos.append(LineInfo(func, False))
+            func, func_line = enclosing()
+            infos.append(LineInfo(func, False, func_line))
             continue
 
         indent = len(masked) - len(masked.lstrip())
         while stack and stack[-1][0] >= indent:
             stack.pop()
         parent_kind = stack[-1][1] if stack else None
-        func = next((name for _, kind, name in reversed(stack) if kind == "func"), None)
+        func, func_line = enclosing()
         in_func = func is not None
 
         m = _FUNC.match(masked)
         if m:
-            infos.append(LineInfo(m.group(1), False))
-            stack.append((indent, "func", m.group(1)))
+            infos.append(LineInfo(m.group(1), False, li + 1))
+            stack.append((indent, "func", m.group(1), li + 1))
             continue
 
         is_pattern = parent_kind == "match" and stripped.endswith(":")
@@ -97,13 +102,25 @@ def analyze(source: str) -> list[LineInfo]:
             and not is_pattern
             and li not in multiline
         )
-        infos.append(LineInfo(func, markable))
+        infos.append(LineInfo(func, markable, func_line))
 
         if stripped.endswith(":"):
             word = _FIRST_WORD.match(masked)
             kind = "pattern" if is_pattern else (word.group(1) if word else "block")
-            stack.append((indent, kind, None))
+            stack.append((indent, kind, None, None))
     return infos
+
+
+def function_entries(source: str) -> dict[int, int]:
+    """Map each function's `func` line to its first markable body line (1-based).
+
+    A marker on that line records whether the function ran at all.
+    """
+    entries: dict[int, int] = {}
+    for li, info in enumerate(analyze(source)):
+        if info.markable and info.func_line is not None and info.func_line not in entries:
+            entries[info.func_line] = li + 1
+    return entries
 
 
 def instrument(source: str, lines: set[int]) -> tuple[str, set[int]]:

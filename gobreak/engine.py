@@ -236,8 +236,14 @@ def _build_coverage(
     limit: float,
     say: Callable[[str], None],
 ) -> _Coverage:
-    """Run each test file alone once against the instrumented target."""
-    instrumented, marked = triage.instrument(source, {m.line for m in mutants})
+    """Run each test file alone once against the instrumented target.
+
+    Marks every mutated line plus the first line of each function that holds
+    one, so triage can tell a function that never ran from one that ran
+    without taking a branch.
+    """
+    lines = {m.line for m in mutants} | _entry_lines(source, {m.line for m in mutants})
+    instrumented, marked = triage.instrument(source, lines)
     say(f"coverage map: {len(tests)} test file(s), {len(marked)} marked line(s)")
     originals = {c: (c / rel).read_bytes() for c in copies}
     hits: dict[str, set[int]] = {}
@@ -274,6 +280,17 @@ def _build_coverage(
             + ", ".join(sorted(unmapped))
         )
     return _Coverage(marked, hits, sorted(unmapped))
+
+
+def _entry_lines(source: str, lines: set[int]) -> set[int]:
+    """First markable line of each function that contains one of `lines`."""
+    infos = triage.analyze(source)
+    entries = triage.function_entries(source)
+    return {
+        entries[infos[n - 1].func_line]
+        for n in lines
+        if infos[n - 1].func_line in entries
+    }
 
 
 def _triage(
@@ -315,7 +332,8 @@ def _triage(
     else:
         say("triage run (line coverage)")
         copy_target = copy_root / rel
-        instrumented, marked = triage.instrument(source, {r.mutant.line for r in unruled})
+        survivor_lines = {r.mutant.line for r in unruled}
+        instrumented, marked = triage.instrument(source, survivor_lines | _entry_lines(source, survivor_lines))
         original = copy_target.read_bytes()
         try:
             copy_target.write_bytes(instrumented.encode("utf-8"))
@@ -333,6 +351,7 @@ def _triage(
         hits = triage.hits_from_output(run.output)
 
     infos = triage.analyze(source)
+    entries = triage.function_entries(source)
     refs: dict[str, int] = {}
     for r in unruled:
         line = r.mutant.line
@@ -341,6 +360,12 @@ def _triage(
             continue
         func = infos[line - 1].func
         if func is None or triage.is_engine_callback(func):
+            r.triage = triage.UNREACHED
+            continue
+        # The function ran in the tests but this line did not: a branch no
+        # test takes, never dead code.
+        entry = entries.get(infos[line - 1].func_line)
+        if entry is not None and entry in marked and entry in hits:
             r.triage = triage.UNREACHED
             continue
         if func not in refs:

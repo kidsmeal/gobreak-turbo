@@ -75,6 +75,14 @@ class AnalyzeTest(unittest.TestCase):
     def test_inner_class_methods_are_tracked(self):
         self.assertTrue(self.info(32).markable)
         self.assertEqual(self.info(32).func, "twice")
+        self.assertEqual(self.info(32).func_line, 31)
+
+    def test_function_entries_map_each_func_line_to_its_first_body_line(self):
+        entries = triage.function_entries(SOURCE)
+        self.assertEqual(entries[6], 7)  # pick
+        self.assertEqual(entries[15], 16)  # route: its `match` line
+        self.assertEqual(entries[23], 25)  # call_many: after the two-line signature
+        self.assertEqual(entries[31], 32)  # Inner.twice
 
 
 class InstrumentTest(unittest.TestCase):

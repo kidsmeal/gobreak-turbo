@@ -2,8 +2,10 @@ extends RefCounted
 
 ## Self-check target. tests/test_fixture_strong.gd kills every mutant the
 ## tests reach; tests/test_fixture_hollow.gd kills none. Triage must report
-## unused_double as dead (no reference) and only_called_by_caller as
-## unreached (referenced by fixture_caller.gd, never run by a test).
+## unused_double as dead (no reference), only_called_by_caller as unreached
+## (referenced by fixture_caller.gd, never run by a test), and safe_div's
+## b == 0 branch as unreached: the tests run safe_div but never divide by 0,
+## and a function that ran is never dead even when no game code calls it.
 
 
 static func over_cap(a: int, b: int, cap: int) -> bool:
@@ -33,3 +35,9 @@ static func unused_double(n: int) -> int:
 
 static func only_called_by_caller(n: int) -> int:
 	return n + 1
+
+
+static func safe_div(a: int, b: int) -> int:
+	if b == 0:
+		return -1
+	return a / b

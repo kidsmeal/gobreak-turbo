@@ -432,8 +432,8 @@ def cmd_selfcheck(args: argparse.Namespace) -> int:
     if dead != {"unused_double"}:
         failures.append(f"strong tests: expected dead survivors only in unused_double, got {sorted(dead)}")
     unreached = _funcs_of(strong, source, triage.UNREACHED)
-    if unreached != {"only_called_by_caller"}:
-        failures.append(f"strong tests: expected unreached survivors only in only_called_by_caller, got {sorted(unreached)}")
+    if unreached != {"only_called_by_caller", "safe_div"}:
+        failures.append(f"strong tests: expected unreached survivors only in only_called_by_caller and safe_div, got {sorted(unreached)}")
     if strong.count(runner.KILLED) == 0:
         failures.append("strong tests: expected killed mutants, got 0")
     if not hollow.survivors(triage.REACHED):
