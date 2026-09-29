@@ -72,7 +72,7 @@ class ConfigTest(unittest.TestCase):
 class CollectTargetsTest(unittest.TestCase):
     def test_directory_run_skips_tests_addons_and_dot_dirs(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()  # macOS temp dirs sit behind a /var symlink
             for rel in ("src/a.gd", "src/deep/b.gd", "src/test_c.gd", "tests/test_a.gd",
                         "tests/helpers/h.gd", "addons/gut/x.gd", ".godot/y.gd", "src/readme.md"):
                 path = root / rel

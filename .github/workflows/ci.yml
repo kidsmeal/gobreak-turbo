@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  GODOT_VERSION: 4.6.2
+
+jobs:
+  unit:
+    name: unit tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: unit tests
+        run: python -m unittest discover -s tests -t . -v
+
+  godot:
+    name: selfcheck and framework examples (Godot ${{ env.GODOT_VERSION }}, Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: install Godot
+        run: |
+          curl -sSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          echo "GODOT=$PWD/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: install gobreak
+        run: python -m pip install .
+      - name: selfcheck
+        run: gobreak selfcheck --jobs 2
+      - name: fetch framework addons
+        run: python examples/fetch_addons.py
+      - name: GUT example
+        run: |
+          "$GODOT" --headless --path examples/gut --import
+          gobreak run examples/gut/fixture_math.gd --json gut.json || test $? -eq 1
+          python -c "import json,sys; d=json.load(open('gut.json')); t=d['triage']; s=d['summary']; sys.exit(0 if (s['killed'],t['dead'],t['unreached'],t['reached'])==(12,2,2,0) else f'unexpected: {s} {t}')"
+      - name: gdUnit4 example
+        run: |
+          "$GODOT" --headless --path examples/gdunit4 --import
+          gobreak run examples/gdunit4/fixture_math.gd --json gdunit4.json || test $? -eq 1
+          python -c "import json,sys; d=json.load(open('gdunit4.json')); t=d['triage']; s=d['summary']; sys.exit(0 if (s['killed'],t['dead'],t['unreached'],t['reached'])==(12,2,2,0) else f'unexpected: {s} {t}')"
