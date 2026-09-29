@@ -1,0 +1,5 @@
+{
+  "command": "{godot} --headless --path . -s addons/gut/gut_cmdln.gd -gexit -gtest={tests}",
+  "test_dirs": ["test"],
+  "jobs": 2
+}

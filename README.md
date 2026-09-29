@@ -9,7 +9,7 @@ Mutation testing CLI for Godot 4 projects. It changes one line of GDScript at a 
 - Mutates a file, a whole directory, or only the lines changed since a git ref.
 - Counts a GDScript runtime error (`SCRIPT ERROR`) as killed even when the test command exits `0`.
 - Sorts survivors as `dead`, `unreached`, `reached` or ruled, and records rulings in `.gobreak/rulings.json`. Details in `docs/TRIAGE.md`.
-- Works with any test command that exits non-zero on failure.
+- Works with any test command that exits non-zero on failure; verified GUT and gdUnit4 commands are in `docs/CONFIGURATION.md`, with runnable projects in `examples/`.
 - Proves itself with `selfcheck` on a bundled fixture of strong and hollow tests.
 
 ## Requirements

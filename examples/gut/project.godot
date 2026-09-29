@@ -1,0 +1,7 @@
+; GoBreak Turbo example project for GUT.
+
+config_version=5
+
+[application]
+
+config/name="GoBreak Turbo GUT example"

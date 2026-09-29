@@ -64,5 +64,15 @@ An unknown key or a value of the wrong type stops the run with exit `2`.
 
 The command runs with the project copy as its working directory, so use `--path .`. Coverage selection needs `{tests}` or `{tests:FLAG}` in the command; without it every mutant runs the full command.
 
+## Framework commands
+Verified with `examples/` on Godot `4.6.2`:
+
+| Framework | `command` |
+|---|---|
+| GUT `v9.6.1` | `{godot} --headless --path . -s addons/gut/gut_cmdln.gd -gexit -gtest={tests}` |
+| gdUnit4 `v6.2.1` | `{godot} --headless --path . -s -d --remote-debug tcp://127.0.0.1:0 res://addons/gdUnit4/bin/GdUnitCmdTool.gd --ignoreHeadlessMode {tests:-a}` |
+
+The gdUnit4 `--remote-debug` address is never bound; it stops Godot's interactive debugger from waiting on a parse error, as gdUnit4's own `runtest.cmd` does.
+
 ## Directory runs
 `gobreak run <dir>` mutates every `.gd` file under the directory, except files matching `test_patterns`, anything under `test_dirs`, `addons/`, and dot-directories. Project copies are made once and shared by every file. A file with no covering test is skipped and listed in the summary.

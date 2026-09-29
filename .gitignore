@@ -5,3 +5,6 @@ dist/
 .venv/
 venv/
 gobreak/selfcheck/.godot/
+examples/*/.godot/
+examples/*/addons/
+examples/*/reports/

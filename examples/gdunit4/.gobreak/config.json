@@ -1,0 +1,5 @@
+{
+  "command": "{godot} --headless --path . -s -d --remote-debug tcp://127.0.0.1:0 res://addons/gdUnit4/bin/GdUnitCmdTool.gd --ignoreHeadlessMode {tests:-a}",
+  "test_dirs": ["test"],
+  "jobs": 2
+}

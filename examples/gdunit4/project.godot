@@ -1,0 +1,7 @@
+; GoBreak Turbo example project for gdUnit4.
+
+config_version=5
+
+[application]
+
+config/name="GoBreak Turbo gdUnit4 example"
