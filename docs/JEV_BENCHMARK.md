@@ -28,16 +28,17 @@ Date: 2026-09-27. Project: Capsule Castle (Godot `4.6.2`). Cost of the whole ben
 ### `systems/sim/combat_transaction.gd`, 52 `reached` survivors (held out; threshold `0.4` from round 2)
 | Threshold | Correct equivalent hints | Real gaps hinted equivalent |
 |---|---|---|
-| `0.4` | 10 | 5 |
+| `0.4` | 11 | 4 |
 | `0.5` | 5 | 1 |
 | `0.6` | 4 | 0 |
 
-Real gaps hinted equivalent at `0.4`:
+Real gaps hinted equivalent at `0.4`, each confirmed by a test that now kills it (Capsule Castle `tests/test_combat_row_hit_edges.gd`, `9d8f4c9b`):
 - `if reduction != 0.0:` -> `!= 1.0` (`0.52`): a 1-point reduction is skipped.
-- `if exposed_points > 0.0:` -> `> 1.0` (`0.47`): an exposure of exactly 1 point is dropped.
 - `var knockback_strength_val: float = 0.0` -> `1.0` (`0.42`): a source without `knockback_strength` applies knockback.
 - deleting `_event_data[3] = ...` (`0.41`): the `DAMAGE_DEALT` event keeps the previous hit's crit flag.
 - `CRIT_FLAG) > 0.5` -> `> 1.5` (`0.41`): the event never flags a crit.
+
+Correction 2026-09-29: `if exposed_points > 0.0:` -> `> 1.0` (`0.47`) was first graded a real gap. It is equivalent: `SwarmDisorderStore._add_non_damaging_instance` clamps Exposed to its `5`..`30` point band, so a magnitude of `1` cannot reach the bucket. Jev's hint was correct; the table above counts it as correct. The verdict is unchanged: 4 real gaps hinted equivalent at `0.4`.
 
 ## Why it was rejected
 - A wrong "equivalent" hides a real test gap, the failure mutation testing exists to catch.
