@@ -26,7 +26,7 @@ jobs:
         run: python -m unittest discover -s tests -t . -v
 
   godot:
-    name: selfcheck and framework examples (Godot ${{ env.GODOT_VERSION }}, Linux)
+    name: selfcheck and framework examples (Godot 4.6.2, Linux)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
